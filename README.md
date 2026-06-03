@@ -65,6 +65,51 @@ docker compose down -v
 
 ---
 
+## Datos de prueba (seed)
+
+El proyecto incluye un management command para cargar datos de desarrollo: 3 usuarios con todos en distintos estados.
+
+**Solo funciona cuando `DEBUG=True`** — si lo intentás en producción, el comando falla con un error explicativo.
+
+### Correr el seed
+
+```bash
+docker compose exec web python manage.py seed
+```
+
+Output esperado:
+
+```
+Cargando seed data...
+
+  • alice (alice@example.com) — 4 todos creados
+  • bob (bob@example.com) — 3 todos creados
+  • charlie (charlie@example.com) — 3 todos creados
+
+✓ Seed completado.
+
+Credenciales de prueba:
+  username: alice / bob / charlie
+  password: Seed1234!
+```
+
+El comando es **idempotente**: si lo corrés dos veces, los usuarios y todos que ya existen se saltean sin duplicarse.
+
+### Limpiar y re-seedear desde cero
+
+```bash
+# Bajar los contenedores y borrar el volumen de la DB
+docker compose down -v
+
+# Volver a levantar (aplica migraciones desde cero)
+docker compose up -d
+
+# Cargar el seed
+docker compose exec web python manage.py seed
+```
+
+---
+
 ## Estructura del proyecto
 
 ```
