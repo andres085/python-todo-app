@@ -19,6 +19,72 @@ API REST construida con Django 5 + Django REST Framework como proyecto de aprend
 
 ---
 
+## Configuración de CORS
+
+CORS (Cross-Origin Resource Sharing) controla qué orígenes (dominios + puerto) pueden hacer requests al backend desde un browser. Sin esto, el browser bloquea las llamadas del frontend aunque el servidor responda correctamente.
+
+Este proyecto usa [`django-cors-headers`](https://github.com/adamchainz/django-cors-headers). La configuración vive en `config/settings.py` y se controla mediante dos variables de entorno:
+
+| Variable | Tipo | Descripción |
+|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | Lista separada por comas | Orígenes permitidos explícitamente |
+| `CORS_ALLOW_ALL_ORIGINS` | `True` / `False` | Permite **cualquier** origen (solo para desarrollo) |
+
+### Configuración para desarrollo local
+
+El `.env.example` ya incluye los orígenes más comunes:
+
+```env
+# Permite el frontend Vue (Vite dev server) y cualquier app en puerto 3000
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+CORS_ALLOW_ALL_ORIGINS=False
+```
+
+Si tu frontend corre en otro puerto, agregalo a la lista separado por coma:
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8080
+```
+
+### Permitir todos los orígenes (solo dev, con cuidado)
+
+```env
+CORS_ALLOW_ALL_ORIGINS=True
+```
+
+> ⚠️ **Nunca usar `CORS_ALLOW_ALL_ORIGINS=True` en producción.** Cualquier sitio web podría hacer requests autenticados en nombre de tus usuarios.
+
+### Cómo se ve un error de CORS en el browser
+
+Cuando CORS no está configurado o el origen no está en la lista, el browser muestra en consola:
+
+```
+Access to XMLHttpRequest at 'http://localhost:8000/api/todos/'
+from origin 'http://localhost:5173' has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+El request llega al servidor y se procesa normalmente, pero el browser descarta la respuesta. **El problema siempre está en la configuración del servidor, no del frontend.**
+
+### Producción
+
+En producción, especificá el origen exacto del frontend (sin trailing slash):
+
+```env
+CORS_ALLOWED_ORIGINS=https://mi-app.com,https://www.mi-app.com
+CORS_ALLOW_ALL_ORIGINS=False
+```
+
+### Cómo funciona internamente
+
+`django-cors-headers` agrega el middleware `CorsMiddleware` antes de `CommonMiddleware` en el stack de Django. Para cada request entrante:
+
+1. Si el `Origin` del request está en `CORS_ALLOWED_ORIGINS` (o `CORS_ALLOW_ALL_ORIGINS=True`), agrega el header `Access-Control-Allow-Origin` a la respuesta.
+2. Para requests `OPTIONS` (preflight), responde directamente con los headers de CORS sin llegar a la vista.
+3. Si el origen no está permitido, no agrega el header — el browser bloquea la respuesta.
+
+---
+
 ## Setup y arranque
 
 ### Requisitos
