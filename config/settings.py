@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'drf_spectacular',
     # Local apps
     'apps.users.apps.UsersConfig',
     'apps.todos.apps.TodosConfig',
@@ -93,6 +94,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # ──────────────────────────────────────────────
@@ -104,6 +106,22 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,       # Cada refresh genera un nuevo par de tokens
     'BLACKLIST_AFTER_ROTATION': True,    # El refresh viejo queda inválido
     'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# ──────────────────────────────────────────────
+# drf-spectacular (OpenAPI / Swagger)
+# ──────────────────────────────────────────────
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Todo App API',
+    'DESCRIPTION': (
+        'API REST para gestión de tareas personales. '
+        'Autenticación via JWT — obtené los tokens en /api/auth/login/ '
+        'y usá el botón Authorize con el valor: Bearer <access_token>.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,    # oculta el endpoint /api/schema/ del listado de Swagger
+    'COMPONENT_SPLIT_REQUEST': True,  # separa schemas de request y response (útil con write_only)
+    'SCHEMA_PATH_PREFIX': '/api/',
 }
 
 # ──────────────────────────────────────────────

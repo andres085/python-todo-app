@@ -85,6 +85,141 @@ CORS_ALLOW_ALL_ORIGINS=False
 
 ---
 
+## Documentación interactiva (Swagger / ReDoc)
+
+Este proyecto usa [`drf-spectacular`](https://drf-spectacular.readthedocs.io/) para generar documentación OpenAPI 3.0 automáticamente a partir del código.
+
+Con el servidor corriendo, accedé a:
+
+| URL | Descripción |
+|---|---|
+| `http://localhost:8000/api/schema/swagger-ui/` | **Swagger UI** — interfaz interactiva para explorar y probar endpoints |
+| `http://localhost:8000/api/schema/redoc/` | **ReDoc** — documentación navegable más legible |
+| `http://localhost:8000/api/schema/` | Schema OpenAPI en formato YAML (para importar en Postman, Insomnia, etc.) |
+
+### Cómo autenticarte en Swagger UI
+
+Los endpoints protegidos requieren JWT. Para autenticarte dentro de Swagger:
+
+1. Llamá a `POST /api/auth/login/` con tu usuario y contraseña → copiá el valor de `access`.
+2. Hacé clic en el botón **Authorize** (candado arriba a la derecha).
+3. En el campo `bearerAuth`, ingresá: `Bearer <tu_access_token>`.
+4. Confirmá con **Authorize**.
+
+A partir de ese momento todos los requests desde Swagger incluyen el header automáticamente.
+
+### Cómo documentar un endpoint nuevo
+
+`drf-spectacular` genera el schema automáticamente a partir de los serializers y tipos de los métodos. Para la mayoría de los casos solo necesitás `@extend_schema`.
+
+#### Caso 1 — Vista basada en clase (APIView / GenericView)
+
+```python
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
+
+# Definí el shape de la respuesta si usás un envelope custom (como ApiResponse)
+_mi_respuesta = inline_serializer(
+    name='MiRecursoResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'data': MiSerializer(),
+    },
+)
+
+@extend_schema(
+    tags=['Mi Recurso'],          # agrupa el endpoint en Swagger
+    summary='Título corto',       # aparece en la lista de endpoints
+    description='Explicación detallada de qué hace, qué acepta y qué devuelve.',
+    request=MiSerializer,         # schema del body del request
+    responses={200: _mi_respuesta},  # schema de la respuesta
+)
+class MiVista(APIView):
+    def post(self, request):
+        ...
+```
+
+#### Caso 2 — ViewSet (múltiples acciones)
+
+Usá `@extend_schema_view` para documentar cada acción por separado:
+
+```python
+from drf_spectacular.utils import extend_schema_view, extend_schema
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Mi Recurso'],
+        summary='Listar recursos',
+        responses={200: _lista_response},
+    ),
+    create=extend_schema(
+        tags=['Mi Recurso'],
+        summary='Crear recurso',
+        request=MiSerializer,
+        responses={201: _item_response},
+    ),
+    destroy=extend_schema(
+        tags=['Mi Recurso'],
+        summary='Eliminar recurso',
+        responses={204: None},  # 204 no tiene body
+    ),
+)
+class MiViewSet(viewsets.ModelViewSet):
+    ...
+```
+
+#### Caso 3 — Documentar parámetros de query string
+
+```python
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.openapi import OpenApiTypes
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name='completed',
+            type=OpenApiTypes.BOOL,
+            location=OpenApiParameter.QUERY,
+            description='Filtrar por estado: true = completadas, false = pendientes.',
+            required=False,
+        ),
+    ],
+)
+class TodoViewSet(viewsets.ModelViewSet):
+    ...
+```
+
+#### Caso 4 — Excluir un endpoint de la documentación
+
+```python
+@extend_schema(exclude=True)
+class MiVistaInterna(APIView):
+    ...
+```
+
+### Cuándo usar `inline_serializer` vs un serializer real
+
+| Situación | Recomendación |
+|---|---|
+| La respuesta tiene la misma forma que un serializer existente | Usá el serializer directamente en `responses=` |
+| La respuesta es un envelope custom (como `ApiResponse`) | Usá `inline_serializer` para describir el wrapper |
+| El endpoint devuelve un mensaje simple `{success, message}` | Usá `inline_serializer` con dos campos |
+| El endpoint no tiene body (ej: DELETE 204) | Usá `responses={204: None}` |
+
+### Regenerar el schema manualmente
+
+```bash
+# Genera el archivo openapi.yml en la raíz del proyecto
+docker compose exec web python manage.py spectacular --file openapi.yml
+
+# Ver el schema en stdout
+docker compose exec web python manage.py spectacular
+```
+
+Esto es útil para versionar el schema en git o importarlo en herramientas externas.
+
+---
+
 ## Setup y arranque
 
 ### Requisitos

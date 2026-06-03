@@ -1,22 +1,67 @@
 from django.contrib.auth import authenticate
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.openapi import OpenApiTypes
 
 from apps.users.serializers import RegisterSerializer, UserSerializer
 from core.responses import ApiResponse
 
 
+# ── Inline serializers para documentar las respuestas envueltas en ApiResponse ──
+# drf-spectacular no puede inferir el shape de ApiResponse.success() automáticamente,
+# así que lo describimos a mano una vez por endpoint.
+
+_user_response = inline_serializer(
+    name='UserResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'data': UserSerializer(),
+        'message': serializers.CharField(allow_null=True),
+    },
+)
+
+_login_response = inline_serializer(
+    name='LoginResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'data': inline_serializer(
+            name='LoginData',
+            fields={
+                'access': serializers.CharField(),
+                'refresh': serializers.CharField(),
+                'user': UserSerializer(),
+            },
+        ),
+    },
+)
+
+_message_response = inline_serializer(
+    name='MessageResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'message': serializers.CharField(),
+    },
+)
+
+
+# ── Vistas ────────────────────────────────────────────────────────────────────
+
+@extend_schema(
+    tags=['Auth'],
+    summary='Registrar usuario',
+    description=(
+        'Crea una cuenta nueva. Requiere `username`, `email`, `password` y '
+        '`password_confirm`. La contraseña debe tener al menos 8 caracteres '
+        'y no ser demasiado común.'
+    ),
+    request=RegisterSerializer,
+    responses={201: _user_response},
+)
 class RegisterView(generics.CreateAPIView):
-    """
-    POST /api/auth/register/
-
-    Crea un nuevo usuario. No requiere autenticación (AllowAny).
-    Devuelve los datos del usuario creado (sin password) con status 201.
-    """
-
     permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
 
@@ -31,17 +76,25 @@ class RegisterView(generics.CreateAPIView):
         )
 
 
+@extend_schema(
+    tags=['Auth'],
+    summary='Iniciar sesión',
+    description=(
+        'Autentica al usuario y devuelve un par de tokens JWT. '
+        'Usá el `access` token en el header `Authorization: Bearer <access>` '
+        'para las requests protegidas. Cuando expire (60 min), usá el `refresh` '
+        'token en `/api/auth/refresh/` para obtener un nuevo par.'
+    ),
+    request=inline_serializer(
+        name='LoginRequest',
+        fields={
+            'username': serializers.CharField(),
+            'password': serializers.CharField(),
+        },
+    ),
+    responses={200: _login_response},
+)
 class LoginView(APIView):
-    """
-    POST /api/auth/login/
-
-    Autentica al usuario y devuelve un par de tokens JWT:
-    - access: token de corta duración (60 min) para hacer requests autenticadas.
-    - refresh: token de larga duración (7 días) para obtener un nuevo access token.
-
-    Usar: Authorization: Bearer <access_token>
-    """
-
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -72,15 +125,21 @@ class LoginView(APIView):
         })
 
 
+@extend_schema(
+    tags=['Auth'],
+    summary='Cerrar sesión',
+    description=(
+        'Invalida el `refresh` token agregándolo a la blacklist. '
+        'Después de esto no se pueden obtener nuevos access tokens con ese refresh. '
+        'El access token actual sigue siendo válido hasta que expire.'
+    ),
+    request=inline_serializer(
+        name='LogoutRequest',
+        fields={'refresh': serializers.CharField()},
+    ),
+    responses={200: _message_response},
+)
 class LogoutView(APIView):
-    """
-    POST /api/auth/logout/
-
-    Invalida el refresh token añadiéndolo a la blacklist de SimpleJWT.
-    Después de esto, ese refresh token no puede generar nuevos access tokens.
-    El access token sigue siendo válido hasta que expire (por eso su vida es corta).
-    """
-
     def post(self, request):
         refresh_token = request.data.get('refresh')
 
@@ -104,14 +163,13 @@ class LogoutView(APIView):
         return ApiResponse.success(message='Logged out successfully.')
 
 
+@extend_schema(
+    tags=['Auth'],
+    summary='Perfil del usuario autenticado',
+    description='Devuelve los datos del usuario dueño del token JWT enviado en el header.',
+    responses={200: _user_response},
+)
 class MeView(generics.RetrieveAPIView):
-    """
-    GET /api/auth/me/
-
-    Devuelve el perfil del usuario autenticado.
-    No recibe pk: get_object() retorna request.user directamente.
-    """
-
     serializer_class = UserSerializer
 
     def get_object(self):

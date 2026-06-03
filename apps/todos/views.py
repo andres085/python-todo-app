@@ -1,5 +1,6 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, serializers, status
 from rest_framework.permissions import IsAuthenticated
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 
 from apps.todos.models import Todo
 from apps.todos.serializers import TodoSerializer
@@ -7,6 +8,68 @@ from core.permissions import IsOwner
 from core.responses import ApiResponse
 
 
+# ── Inline serializers para las respuestas envueltas en ApiResponse ───────────
+
+_todo_response = inline_serializer(
+    name='TodoResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'data': TodoSerializer(),
+    },
+)
+
+_todo_list_response = inline_serializer(
+    name='TodoListResponse',
+    fields={
+        'success': serializers.BooleanField(),
+        'data': TodoSerializer(many=True),
+    },
+)
+
+
+# ── ViewSet ───────────────────────────────────────────────────────────────────
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Todos'],
+        summary='Listar tareas',
+        description='Devuelve todas las tareas del usuario autenticado, ordenadas de más reciente a más antigua.',
+        responses={200: _todo_list_response},
+    ),
+    create=extend_schema(
+        tags=['Todos'],
+        summary='Crear tarea',
+        description='Crea una nueva tarea asociada al usuario autenticado. El campo `user` se asigna automáticamente.',
+        request=TodoSerializer,
+        responses={201: _todo_response},
+    ),
+    retrieve=extend_schema(
+        tags=['Todos'],
+        summary='Obtener tarea',
+        description='Devuelve una tarea por su `id`. Solo accesible si le pertenece al usuario autenticado.',
+        responses={200: _todo_response},
+    ),
+    update=extend_schema(
+        tags=['Todos'],
+        summary='Actualizar tarea (completo)',
+        description='Reemplaza todos los campos de la tarea. Todos los campos son requeridos.',
+        request=TodoSerializer,
+        responses={200: _todo_response},
+    ),
+    partial_update=extend_schema(
+        tags=['Todos'],
+        summary='Actualizar tarea (parcial)',
+        description='Actualiza uno o más campos de la tarea sin necesidad de enviar todos. Ideal para togglear `completed`.',
+        request=TodoSerializer,
+        responses={200: _todo_response},
+    ),
+    destroy=extend_schema(
+        tags=['Todos'],
+        summary='Eliminar tarea',
+        description='Elimina la tarea permanentemente. Devuelve 204 No Content sin cuerpo.',
+        responses={204: None},
+    ),
+)
 class TodoViewSet(viewsets.ModelViewSet):
     """
     ViewSet completo para el CRUD de todos.
